@@ -14,10 +14,10 @@ export interface FeatureCard {
 export const useHomeStore = defineStore('home', () => {
   // 导航链接
   const navLinks = ref([
-    { id: 1, text: '主页', url: '#', active: true },
-    { id: 2, text: '参考资料', url: '#', active: false },
-    { id: 3, text: '实验记录', url: '#', active: false },
-    { id: 4, text: '关于', url: '#', active: false }
+    { id: 1, text: '主页', path: '/', active: true },
+    { id: 2, text: '参考资料', path: '/references', active: false },
+    { id: 3, text: '实验记录', path: '/record', active: false },
+    { id: 4, text: '关于', path: '/about', active: false }
   ])
 
   // 标题和描述

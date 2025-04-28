@@ -104,11 +104,41 @@
         </div>
       </div>
     </div>
+
+    <!-- 添加处理框对话框 -->
+    <el-dialog
+      v-model="processingDialogVisible"
+      title="实验提交处理中"
+      :close-on-click-modal="false"
+      :show-close="false"
+      width="600px"
+      class="processing-dialog"
+    >
+      <div class="processing-content">
+        <div class="progress-section">
+          <el-progress :percentage="processProgress" :status="processStatus" />
+        </div>
+        <div class="log-container" ref="logContainer">
+          <div v-for="(log, index) in processLogs" :key="index" class="log-item" :class="log.type">
+            <span class="log-time">[{{ log.time }}]</span>
+            <span class="log-message">{{ log.message }}</span>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="closeProcessingDialog" :disabled="!isProcessingComplete">关闭</el-button>
+          <el-button type="primary" @click="viewResult" :disabled="!isProcessingComplete || processStatus === 'exception'">
+            查看结果
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, nextTick } from 'vue'
 import { useHomeStore } from '@/stores/home'
 import { storeToRefs } from 'pinia'
 import { fetchCourses } from '@/request'
@@ -225,9 +255,80 @@ const launchEnvironment = async (section: any) => {
   await handleLaunchCommand('browser', section)
 }
 
+// 模拟日志数据 - 成功情况
+const successLogs = [
+  { message: '开始处理实验提交...', type: 'info', delay: 0 },
+  { message: '检查实验环境配置...', type: 'info', delay: 1000 },
+  { message: '环境配置检查通过', type: 'success', delay: 2000 },
+  { message: '启动容器服务...', type: 'info', delay: 3000 },
+  { message: '容器服务启动成功', type: 'success', delay: 4500 },
+  { message: '运行实验检查脚本...', type: 'info', delay: 5000 },
+  { message: '检查点1: 进程创建测试...', type: 'info', delay: 6000 },
+  { message: '检查点1通过', type: 'success', delay: 7000 },
+  { message: '检查点2: 系统调用测试...', type: 'info', delay: 10000 },
+  { message: '检查点2通过', type: 'success', delay: 11000 },
+  { message: '生成实验记录...', type: 'info', delay: 12000 },
+  { message: '所有检查项通过，实验完成！', type: 'success', delay: 14000 }
+]
+
+// 模拟日志数据 - 失败情况
+const failureLogs = [
+  { message: '开始处理实验提交...', type: 'info', delay: 0 },
+  { message: '检查实验环境配置...', type: 'info', delay: 1000 },
+  { message: '环境配置检查通过', type: 'success', delay: 2000 },
+  { message: '启动容器服务...', type: 'info', delay: 3000 },
+  { message: '容器服务启动成功', type: 'success', delay: 4500 },
+  { message: '运行实验检查脚本...', type: 'info', delay: 5000 },
+  { message: '检查点1: 进程创建测试...', type: 'info', delay: 6000 },
+  { message: '检查点1通过', type: 'success', delay: 7000 },
+  { message: '检查点2: 系统调用测试...', type: 'info', delay: 10000 },
+  { message: '检查点2失败: 系统调用参数错误', type: 'error', delay: 11000 },
+  { message: '生成实验记录...', type: 'info', delay: 12000 },
+  { message: '实验检查未通过，请修复问题后重试', type: 'error', delay: 14000 }
+]
+
+// 模拟处理过程
+const simulateProcessing = (isSuccess: boolean) => {
+  processProgress.value = 0
+  processStatus.value = 'active'
+  processLogs.value = []
+  isProcessingComplete.value = false
+
+  const logs = isSuccess ? successLogs : failureLogs
+  const totalSteps = logs.length
+  let currentStep = 0
+
+  logs.forEach((log, index) => {
+    setTimeout(() => {
+      processLogs.value.push({
+        time: formatTime(),
+        message: log.message,
+        type: log.type
+      })
+      
+      currentStep++
+      processProgress.value = Math.floor((currentStep / totalSteps) * 100)
+      
+      if (currentStep === totalSteps) {
+        processStatus.value = isSuccess ? 'success' : 'exception'
+        isProcessingComplete.value = true
+      }
+      
+      scrollToBottom()
+    }, log.delay)
+  })
+}
+
 // 提交小节
 const submitSection = async (section: any) => {
   console.log('提交小节:', section.ID)
+  
+  // 根据小节ID的奇偶性决定是否成功
+  const isSuccess = section.ID % 2 === 1
+  
+  // 显示处理框并开始模拟处理
+  processingDialogVisible.value = true
+  simulateProcessing(isSuccess)
   
   try {
     // 发送GET请求到后端的/check接口，带上section_id参数
@@ -238,29 +339,78 @@ const submitSection = async (section: any) => {
       }
     })
     
-    // 检查响应状态
-    if (response.status === 200) {
-      // 解析JSON响应
-      const data = await response.json()
-      
-      // 根据answer字段判断答案是否正确
-      if (data.answer === "true") {
-        // 如果答案正确，显示成功消息
-        ElMessage.success('答案正确！')
-        // 重新获取课程数据以更新完成状态
-        await getCourses()
-      } else {
-        // 如果答案错误，显示错误消息
-        ElMessage.error('答案错误，请重新尝试')
-      }
+    // 等待模拟处理完成
+    await new Promise(resolve => setTimeout(resolve, 15000))
+    
+    // 根据奇偶性模拟不同的结果
+    if (isSuccess) {
+      ElMessage.success('实验检查通过！')
+      await getCourses() // 更新课程数据
     } else {
-      // 如果请求失败，显示警告信息
-      ElMessage.warning('提交失败，请稍后再试')
+      ElMessage.error('实验检查未通过，请检查后重试')
     }
+    
   } catch (error) {
     console.error('提交请求失败:', error)
     ElMessage.error('提交请求失败，请检查网络连接')
+    processStatus.value = 'exception'
+    processLogs.value.push({
+      time: formatTime(),
+      message: '网络请求失败，请检查网络连接',
+      type: 'error'
+    })
   }
+}
+
+// 处理框相关状态
+const processingDialogVisible = ref(false)
+const processProgress = ref(0)
+const processStatus = ref('')
+const processLogs = ref<Array<{time: string, message: string, type: string}>>([])
+const isProcessingComplete = ref(false)
+const logContainer = ref<HTMLElement | null>(null)
+
+// 格式化时间
+const formatTime = () => {
+  const now = new Date()
+  return now.toLocaleTimeString('zh-CN', { 
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
+}
+
+// 滚动到日志底部
+const scrollToBottom = async () => {
+  await nextTick()
+  if (logContainer.value) {
+    logContainer.value.scrollTop = logContainer.value.scrollHeight
+  }
+}
+
+// 查看结果
+const viewResult = () => {
+  // 这里可以添加查看结果的逻辑
+  processingDialogVisible.value = false
+}
+
+// 关闭处理框
+const closeProcessingDialog = () => {
+  if (isProcessingComplete.value) {
+    processingDialogVisible.value = false
+  }
+}
+
+const breadcrumbs = computed(() => [
+  { id: 1, text: '首页', url: '/', active: false },
+  { id: 2, text: '章节', url: '/chapter', active: true }
+])
+
+// 提交实验
+const handleSubmit = async () => {
+  startProcessing()
+  // 这里可以添加实际的提交逻辑
 }
 
 onMounted(() => {
@@ -468,5 +618,90 @@ onMounted(() => {
 .empty-state {
   padding: 40px 0;
   text-align: center;
+}
+
+.processing-dialog :deep(.el-dialog__body) {
+  padding: 20px;
+}
+
+.processing-content {
+  min-height: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.progress-section {
+  padding: 0 20px;
+}
+
+.log-container {
+  height: 300px;
+  overflow-y: auto;
+  background: #1e1e1e;
+  border-radius: 8px;
+  padding: 16px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.log-item {
+  margin-bottom: 8px;
+  color: #fff;
+  display: flex;
+  gap: 8px;
+}
+
+.log-time {
+  color: #888;
+  white-space: nowrap;
+}
+
+.log-message {
+  flex: 1;
+  word-break: break-all;
+}
+
+.log-item.info .log-message {
+  color: #fff;
+}
+
+.log-item.success .log-message {
+  color: #67c23a;
+}
+
+.log-item.warning .log-message {
+  color: #e6a23c;
+}
+
+.log-item.error .log-message {
+  color: #f56c6c;
+}
+
+/* 自定义滚动条样式 */
+.log-container::-webkit-scrollbar {
+  width: 6px;
+}
+
+.log-container::-webkit-scrollbar-track {
+  background: #2d2d2d;
+  border-radius: 3px;
+}
+
+.log-container::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 3px;
+}
+
+.log-container::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 20px;
 }
 </style>

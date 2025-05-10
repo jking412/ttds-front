@@ -60,13 +60,85 @@
         </div>
       </el-card>
     </div>
+
+    <!-- 实验详情对话框 -->
+    <el-dialog
+      v-model="detailsDialogVisible"
+      :title="selectedRecord ? `实验详情: ${selectedRecord.sectionTitle}` : '实验详情'"
+      width="650px"
+    >
+      <div v-if="selectedRecord" class="experiment-details">
+        <div class="details-header">
+          <el-tag :type="getRecordStatusTag(selectedRecord.status)" class="status-tag">
+            {{ getStatusText(selectedRecord.status) }}
+          </el-tag>
+          <div class="experiment-time">
+            <div class="time-item">
+              <span class="time-label">开始时间:</span>
+              <span class="time-value">{{ formatDate(selectedRecord.startTime) }}</span>
+            </div>
+            <div class="time-item">
+              <span class="time-label">结束时间:</span> 
+              <span class="time-value">{{ selectedRecord.endTime ? formatDate(selectedRecord.endTime) : '进行中' }}</span>
+            </div>
+            <div class="time-item">
+              <span class="time-label">总耗时:</span>
+              <span class="time-value">{{ calculateDuration(selectedRecord.startTime, selectedRecord.endTime) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <el-divider />
+
+        <div class="experiment-info">
+          <h3>实验内容</h3>
+          <p>{{ selectedRecord.sectionDescription }}</p>
+        </div>
+
+        <el-divider />
+
+        <div class="experiment-logs">
+          <h3>实验日志</h3>
+          <div class="log-container">
+            <div v-for="(log, index) in experimentLogs" :key="index" class="log-item" :class="log.type">
+              <span class="log-time">[{{ log.time }}]</span>
+              <span class="log-message">{{ log.message }}</span>
+            </div>
+          </div>
+        </div>
+
+        <el-divider />
+
+        <div class="experiment-result">
+          <h3>检查结果</h3>
+          <div class="result-content" :class="selectedRecord.status">
+            <el-icon v-if="selectedRecord.status === 'completed'"><SuccessFilled /></el-icon>
+            <el-icon v-else-if="selectedRecord.status === 'failed'"><CircleCloseFilled /></el-icon>
+            <el-icon v-else><Loading /></el-icon>
+            <span>{{ selectedRecord.checkResult || '暂无结果' }}</span>
+          </div>
+          <div class="user-output" v-if="selectedRecord.userOutput">
+            <h4>输出内容:</h4>
+            <pre>{{ selectedRecord.userOutput }}</pre>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="detailsDialogVisible = false">关闭</el-button>
+          <el-button type="success" @click="retryExperiment(selectedRecord)">
+            <el-icon><Refresh /></el-icon>重新实验
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
   </CommonLayout>
 </template>
 
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import CommonLayout from '@/components/CommonLayout.vue'
-import { Timer, Check, View, Refresh } from '@element-plus/icons-vue'
+import { Timer, Check, View, Refresh, SuccessFilled, CircleCloseFilled, Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 
 // 模拟课程数据
@@ -155,6 +227,26 @@ const records = ref([
 // 当前选中的课程
 const activeCourse = ref('1')
 
+// 实验详情对话框
+const detailsDialogVisible = ref(false)
+const selectedRecord = ref<any>(null)
+
+// 模拟实验日志数据
+const experimentLogs = ref([
+  { time: '10:00:15', message: '开始处理实验提交...', type: 'info' },
+  { time: '10:00:45', message: '检查实验环境配置...', type: 'info' },
+  { time: '10:01:20', message: '环境配置检查通过', type: 'success' },
+  { time: '10:01:55', message: '启动容器服务...', type: 'info' },
+  { time: '10:02:30', message: '容器服务启动成功', type: 'success' },
+  { time: '10:03:05', message: '运行实验检查脚本...', type: 'info' },
+  { time: '10:03:40', message: '检查点1: 进程创建测试...', type: 'info' },
+  { time: '10:04:15', message: '检查点1通过', type: 'success' },
+  { time: '10:04:50', message: '检查点2: 系统调用测试...', type: 'info' },
+  { time: '10:05:25', message: '检查点2通过', type: 'success' },
+  { time: '10:06:00', message: '生成实验记录...', type: 'info' },
+  { time: '10:06:35', message: '所有检查项通过，实验完成！', type: 'success' }
+])
+
 // 获取指定课程的实验记录
 const getCourseRecords = (courseId: number) => {
   return records.value.filter(record => record.courseId === courseId)
@@ -214,14 +306,91 @@ const calculateDuration = (startTime: string, endTime: string) => {
 
 // 查看实验详情
 const viewDetails = (record: any) => {
-  ElMessage.success(`正在查看实验记录: ${record.sectionTitle}`)
-  // TODO: 实现查看详情的具体逻辑
+  selectedRecord.value = record
+  detailsDialogVisible.value = true
+  
+  // 根据记录状态动态生成日志
+  if (record.status === 'failed') {
+    // 失败状态的日志
+    experimentLogs.value = [
+      { time: formatTimeOnly(new Date(record.startTime)), message: '开始处理实验提交...', type: 'info' },
+      { time: addMinutes(new Date(record.startTime), 1), message: '检查实验环境配置...', type: 'info' },
+      { time: addMinutes(new Date(record.startTime), 2), message: '环境配置检查通过', type: 'success' },
+      { time: addMinutes(new Date(record.startTime), 3), message: '启动容器服务...', type: 'info' },
+      { time: addMinutes(new Date(record.startTime), 4), message: '容器服务启动成功', type: 'success' },
+      { time: addMinutes(new Date(record.startTime), 5), message: '运行实验检查脚本...', type: 'info' },
+      { time: addMinutes(new Date(record.startTime), 6), message: '检查点1: 进程创建测试...', type: 'info' },
+      { time: addMinutes(new Date(record.startTime), 7), message: '检查点1通过', type: 'success' },
+      { time: addMinutes(new Date(record.startTime), 8), message: '检查点2: 系统调用测试...', type: 'info' },
+      { time: addMinutes(new Date(record.startTime), 9), message: '检查点2失败: 系统调用返回值异常', type: 'error' },
+      { time: addMinutes(new Date(record.startTime), 10), message: '生成实验记录...', type: 'info' },
+      { time: addMinutes(new Date(record.startTime), 11), message: '实验未通过，请检查系统调用实现', type: 'error' }
+    ]
+  } else if (record.status === 'in_progress') {
+    // 进行中状态的日志
+    experimentLogs.value = [
+      { time: formatTimeOnly(new Date(record.startTime)), message: '开始处理实验提交...', type: 'info' },
+      { time: addMinutes(new Date(record.startTime), 1), message: '检查实验环境配置...', type: 'info' },
+      { time: addMinutes(new Date(record.startTime), 2), message: '环境配置检查通过', type: 'success' },
+      { time: addMinutes(new Date(record.startTime), 3), message: '启动容器服务...', type: 'info' },
+      { time: addMinutes(new Date(record.startTime), 4), message: '容器服务启动成功', type: 'success' },
+      { time: addMinutes(new Date(record.startTime), 5), message: '运行实验检查脚本...', type: 'info' },
+      { time: addMinutes(new Date(record.startTime), 6), message: '检查点1: 进程创建测试...', type: 'info' },
+      { time: addMinutes(new Date(record.startTime), 7), message: '检查中...', type: 'info' }
+    ]
+  } else {
+    // 完成状态的日志
+    experimentLogs.value = [
+      { time: formatTimeOnly(new Date(record.startTime)), message: '开始处理实验提交...', type: 'info' },
+      { time: addMinutes(new Date(record.startTime), 1), message: '检查实验环境配置...', type: 'info' },
+      { time: addMinutes(new Date(record.startTime), 2), message: '环境配置检查通过', type: 'success' },
+      { time: addMinutes(new Date(record.startTime), 3), message: '启动容器服务...', type: 'info' },
+      { time: addMinutes(new Date(record.startTime), 4), message: '容器服务启动成功', type: 'success' },
+      { time: addMinutes(new Date(record.startTime), 5), message: '运行实验检查脚本...', type: 'info' },
+      { time: addMinutes(new Date(record.startTime), 6), message: '检查点1: 进程创建测试...', type: 'info' },
+      { time: addMinutes(new Date(record.startTime), 7), message: '检查点1通过', type: 'success' },
+      { time: addMinutes(new Date(record.startTime), 8), message: '检查点2: 系统调用测试...', type: 'info' },
+      { time: addMinutes(new Date(record.startTime), 9), message: '检查点2通过', type: 'success' },
+      { time: addMinutes(new Date(record.startTime), 10), message: '生成实验记录...', type: 'info' },
+      { time: addMinutes(new Date(record.startTime), 11), message: '所有检查项通过，实验完成！', type: 'success' }
+    ]
+  }
+}
+
+// 格式化时间（只显示时分秒）
+const formatTimeOnly = (date: Date): string => {
+  return date.toLocaleTimeString('zh-CN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  })
+}
+
+// 添加分钟并返回格式化后的时间
+const addMinutes = (date: Date, minutes: number): string => {
+  const newDate = new Date(date.getTime() + minutes * 60000)
+  return formatTimeOnly(newDate)
 }
 
 // 重新进行实验
 const retryExperiment = (record: any) => {
   ElMessage.success(`正在重新开始实验: ${record.sectionTitle}`)
-  // TODO: 实现重新实验的具体逻辑
+  
+  // 模拟调用后端接口启动容器
+  setTimeout(() => {
+    try {
+      // 打开实验页面，与ChapterView中相同的URL
+      window.open('http://localhost:8000?folder=/root', '_blank')
+      
+      // 关闭详情对话框（如果打开的话）
+      if (detailsDialogVisible.value) {
+        detailsDialogVisible.value = false
+      }
+    } catch (error) {
+      console.error('启动实验环境失败:', error)
+      ElMessage.error('启动实验环境失败，请稍后再试')
+    }
+  }, 1000)
 }
 </script>
 
@@ -313,4 +482,121 @@ const retryExperiment = (record: any) => {
 :deep(.el-tabs__active-bar) {
   background-color: var(--el-color-primary);
 }
-</style> 
+
+.experiment-details {
+  padding: 10px;
+}
+
+.details-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 15px;
+}
+
+.status-tag {
+  font-size: 14px;
+  padding: 5px 10px;
+}
+
+.experiment-time {
+  text-align: right;
+}
+
+.time-item {
+  margin-bottom: 5px;
+  font-size: 14px;
+}
+
+.time-label {
+  font-weight: bold;
+  margin-right: 5px;
+  color: #606266;
+}
+
+.experiment-info h3,
+.experiment-logs h3,
+.experiment-result h3 {
+  font-size: 16px;
+  margin-bottom: 10px;
+  color: #303133;
+}
+
+.log-container {
+  max-height: 200px;
+  overflow-y: auto;
+  background-color: #f5f7fa;
+  border-radius: 4px;
+  padding: 10px;
+  font-family: monospace;
+}
+
+.log-item {
+  margin-bottom: 5px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.log-time {
+  color: #909399;
+  margin-right: 8px;
+}
+
+.log-item.info .log-message {
+  color: #409eff;
+}
+
+.log-item.success .log-message {
+  color: #67c23a;
+}
+
+.log-item.error .log-message {
+  color: #f56c6c;
+}
+
+.result-content {
+  display: flex;
+  align-items: center;
+  font-size: 15px;
+  margin: 10px 0;
+}
+
+.result-content.completed {
+  color: #67c23a;
+}
+
+.result-content.failed {
+  color: #f56c6c;
+}
+
+.result-content.in_progress {
+  color: #e6a23c;
+}
+
+.result-content .el-icon {
+  margin-right: 8px;
+  font-size: 18px;
+}
+
+.user-output {
+  margin-top: 15px;
+}
+
+.user-output h4 {
+  font-size: 14px;
+  margin-bottom: 5px;
+  color: #606266;
+}
+
+.user-output pre {
+  background-color: #f5f7fa;
+  border-radius: 4px;
+  padding: 10px;
+  font-family: monospace;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 150px;
+  overflow-y: auto;
+}
+</style>

@@ -8,6 +8,10 @@
           <span>返回主页</span>
         </div>
         <div class="header-title">个人信息</div>
+        <div class="logout-button" @click="handleLogout">
+          <el-icon><SwitchButton /></el-icon>
+          <span>退出登录</span>
+        </div>
       </div>
     </div>
 
@@ -111,14 +115,35 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { ArrowLeft, Close, CircleCheck, Warning, Reading } from '@element-plus/icons-vue'
+import { ArrowLeft, Close, CircleCheck, Warning, Reading, SwitchButton } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import { ElMessageBox } from 'element-plus'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 // 返回主页
 const goBack = () => {
   router.push('/')
+}
+
+// 退出登录
+const handleLogout = () => {
+  ElMessageBox.confirm(
+    '确定要退出登录吗?',
+    '提示',
+    {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning',
+    }
+  ).then(() => {
+    authStore.logout()
+    router.push('/login')
+  }).catch(() => {
+    // 用户取消操作
+  })
 }
 
 // 用户信息
@@ -199,31 +224,28 @@ const formatDate = (dateString: string) => {
   margin: 0 auto;
   padding: 0 20px;
   display: flex;
-  align-items: center;
   justify-content: space-between;
+  align-items: center;
 }
 
-.back-button {
+.back-button, .logout-button {
   display: flex;
   align-items: center;
-  gap: 8px;
   cursor: pointer;
-  padding: 8px 16px;
-  border-radius: 8px;
-  transition: all 0.3s ease;
-  color: white;
-  background: rgba(255, 255, 255, 0.1);
+  transition: opacity 0.2s;
 }
 
-.back-button:hover {
-  background: rgba(255, 255, 255, 0.2);
-  transform: translateX(-2px);
+.back-button:hover, .logout-button:hover {
+  opacity: 0.8;
+}
+
+.back-button .el-icon, .logout-button .el-icon {
+  margin-right: 5px;
 }
 
 .header-title {
   font-size: 1.2rem;
-  font-weight: bold;
-  color: white;
+  font-weight: 500;
 }
 
 .profile-container {
@@ -485,4 +507,4 @@ const formatDate = (dateString: string) => {
 .info-section {
   /* 保持不变 */
 }
-</style> 
+</style>

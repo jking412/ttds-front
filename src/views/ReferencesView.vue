@@ -94,8 +94,8 @@ const references = ref([
     id: 4,
     courseId: 2,
     title: 'TCP/IP详解',
-    author: 'W. Richard Stevens',
-    type: '参考书',
+    author: '中科大郑烇、杨坚',
+    type: '视频',
     content: '深入解析TCP/IP协议栈的实现细节。'
   },
   {
@@ -130,7 +130,22 @@ const getReferenceTypeTag = (type: string) => {
 // 处理阅读参考资料
 const handleReadReference = (reference: any) => {
   ElMessage.success(`正在打开参考资料: ${reference.title}`)
-  // TODO: 实现打开参考资料的具体逻辑
+  
+  // 如果是视频类型，直接打开视频链接
+  if (reference.type === '视频') {
+    if (reference.title === 'TCP/IP详解') {
+      window.open('https://www.bilibili.com/video/BV1h7411a788/?spm_id_from=333.337.search-card.all.click', '_blank')
+      return
+    }
+    // 可以在这里添加其他视频的处理逻辑
+  }
+  
+  // 对于其他类型，按原来的逻辑处理
+  const fileName = encodeURIComponent(`${reference.title}.pdf`)
+  const pdfUrl = `http://localhost:9000/ttds/${fileName}`
+  
+  // 在新标签页中打开PDF
+  window.open(pdfUrl, '_blank')
 }
 </script>
 
